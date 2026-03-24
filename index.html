@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Snapdrum Triage Board</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap');
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'DM Sans',Arial,sans-serif;background:#0f0f11;color:#f0f0f2;min-height:100vh;user-select:none}
+
+  .topbar{display:flex;align-items:center;justify-content:space-between;padding:14px 20px;border-bottom:1px solid #2e2e38;flex-wrap:wrap;gap:10px}
+  .logo{font-size:15px;font-weight:600;display:flex;align-items:center;gap:8px}
+  .logo-dot{width:8px;height:8px;border-radius:50%;background:#7c6cfc}
+  .save-hint{font-size:10px;color:#5a5a6a;font-weight:400;margin-left:4px}
+  .stats-row{display:flex;align-items:center;gap:16px}
+  .stat{text-align:center}
+  .stat-val{font-size:18px;font-weight:600;font-family:'DM Mono',monospace}
+  .stat-lbl{font-size:10px;color:#5a5a6a;text-transform:uppercase;letter-spacing:.08em}
+  .ring-wrap{position:relative;width:44px;height:44px;flex-shrink:0}
+  .ring-wrap svg{transform:rotate(-90deg)}
+  .ring-val{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:500;color:#7c6cfc;font-family:'DM Mono',monospace}
+
+  .filters{display:flex;align-items:center;gap:6px;padding:10px 20px;border-bottom:1px solid #2e2e38;flex-wrap:wrap}
+  .chip{font-size:12px;padding:4px 12px;border-radius:99px;border:1px solid #2e2e38;background:transparent;color:#9898a8;cursor:pointer;white-space:nowrap;transition:all .15s}
+  .chip:hover{border-color:#3a3a48;color:#f0f0f2}
+  .chip.active{background:#7c6cfc;border-color:#7c6cfc;color:#fff}
+  .add-btn{font-size:12px;padding:5px 14px;border-radius:99px;border:1px solid #7c6cfc;background:transparent;color:#7c6cfc;cursor:pointer;margin-left:auto;white-space:nowrap;transition:all .15s}
+  .add-btn:hover{background:#7c6cfc;color:#fff}
+
+  .board{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;padding:16px 20px 40px}
+  .col-head{display:flex;align-items:center;justify-content:space-between;padding-bottom:8px}
+  .col-label{font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:.1em;color:#9898a8}
+  .col-count{font-size:11px;font-family:'DM Mono',monospace;background:#222228;color:#5a5a6a;padding:1px 7px;border-radius:99px}
+  .col-body{background:#18181c;border-radius:10px;padding:10px;min-height:160px;display:flex;flex-direction:column;gap:8px;transition:background .15s,outline .15s}
+  .col-body.drag-over{background:#1a1730;outline:2px dashed #7c6cfc;outline-offset:-2px}
+  .col-empty{font-size:11px;color:#5a5a6a;text-align:center;padding:24px 0;pointer-events:none}
+
+  .card{background:#222228;border:1px solid #2e2e38;border-radius:10px;padding:11px 12px;cursor:grab;transition:border-color .15s,opacity .2s,box-shadow .15s}
+  .card:hover{border-color:#3a3a48;box-shadow:0 2px 12px rgba(124,108,252,.08)}
+  .card.dragging{opacity:.35;cursor:grabbing}
+  .card-sec{font-size:10px;color:#5a5a6a;text-transform:uppercase;letter-spacing:.07em;margin-bottom:4px}
+  .card-top{display:flex;align-items:flex-start;justify-content:space-between;gap:6px;margin-bottom:6px}
+  .card-title{font-size:13px;font-weight:500;line-height:1.35;color:#f0f0f2}
+  .badge{font-size:10px;font-weight:500;padding:2px 7px;border-radius:99px;white-space:nowrap;flex-shrink:0}
+  .b-urgent{background:#2a1515;color:#ff5757}
+  .b-thisweek{background:#2a1e0a;color:#f5a623}
+  .b-planning{background:#1e1e26;color:#9898a8}
+  .deadline{font-size:10px;color:#ff5757;font-weight:500;margin-bottom:6px;display:flex;align-items:center;gap:4px}
+  .deadline-dot{width:5px;height:5px;border-radius:50%;background:#ff5757;flex-shrink:0;display:inline-block}
+  .tasks{display:flex;flex-direction:column;gap:4px;margin-bottom:6px}
+  .task-row{display:flex;align-items:flex-start;gap:7px}
+  .cb{width:13px;height:13px;border-radius:3px;border:1px solid #3a3a48;background:transparent;flex-shrink:0;margin-top:1px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s}
+  .cb:hover{border-color:#7c6cfc}
+  .cb.checked{background:#7c6cfc;border-color:#7c6cfc}
+  .cb.checked::after{content:'';display:block;width:4px;height:6px;border:1.5px solid #fff;border-top:none;border-left:none;transform:rotate(45deg);margin-top:-1px}
+  .task-txt{font-size:11px;color:#9898a8;line-height:1.45}
+  .task-txt.done{color:#5a5a6a;text-decoration:line-through}
+  .prog-wrap{margin-top:7px}
+  .prog-bar{height:3px;background:#2e2e38;border-radius:99px;overflow:hidden}
+  .prog-fill{height:100%;background:#7c6cfc;border-radius:99px;transition:width .3s}
+  .prog-txt{font-size:10px;color:#5a5a6a;margin-top:3px;font-family:'DM Mono',monospace}
+  .card-meta{display:flex;align-items:center;justify-content:space-between;margin-top:8px;padding-top:7px;border-top:1px solid #2e2e38}
+  .drag-hint{font-size:10px;color:#3a3a48;display:flex;align-items:center;gap:3px}
+  .edit-btn{font-size:10px;padding:2px 8px;border-radius:4px;border:1px solid #2e2e38;background:transparent;color:#5a5a6a;cursor:pointer;transition:all .12s}
+  .edit-btn:hover{border-color:#7c6cfc;color:#7c6cfc}
+  .owner-tag{font-size:10px;color:#5a5a6a;margin-top:5px}
+
+  .overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:100;align-items:center;justify-content:center;padding:20px}
+  .overlay.open{display:flex}
+  .modal{background:#18181c;border:1px solid #3a3a48;border-radius:14px;padding:24px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto}
+  .modal-title{font-size:16px;font-weight:600;margin-bottom:18px;color:#f0f0f2}
+  .form-group{margin-bottom:14px}
+  .form-label{font-size:11px;color:#9898a8;text-transform:uppercase;letter-spacing:.07em;margin-bottom:5px;display:block}
+  .form-input{width:100%;background:#222228;border:1px solid #2e2e38;border-radius:6px;padding:8px 10px;color:#f0f0f2;font-size:13px;font-family:'DM Sans',Arial,sans-serif;outline:none;transition:border-color .15s}
+  .form-input:focus{border-color:#7c6cfc}
+  .form-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .task-edit-row{display:flex;gap:6px;align-items:center;margin-bottom:6px}
+  .task-edit-row input{flex:1}
+  .remove-task-btn{font-size:18px;color:#5a5a6a;background:none;border:none;cursor:pointer;padding:0 4px;line-height:1;flex-shrink:0}
+  .remove-task-btn:hover{color:#ff5757}
+  .add-task-field-btn{font-size:11px;color:#7c6cfc;background:none;border:1px dashed #3a3a48;border-radius:6px;padding:5px 10px;cursor:pointer;width:100%;margin-top:4px}
+  .add-task-field-btn:hover{border-color:#7c6cfc}
+  .modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:20px}
+  .btn-cancel{font-size:12px;padding:7px 16px;border-radius:6px;border:1px solid #2e2e38;background:transparent;color:#9898a8;cursor:pointer}
+  .btn-save{font-size:12px;padding:7px 18px;border-radius:6px;border:1px solid #7c6cfc;background:#7c6cfc;color:#fff;cursor:pointer;font-weight:500}
+  .btn-delete{font-size:12px;padding:7px 14px;border-radius:6px;border:1px solid #2a1515;background:transparent;color:#ff5757;cursor:pointer;margin-right:auto}
+
+  @media(max-width:900px){.board{grid-template-columns:repeat(2,1fr)}}
+  @media(max-width:560px){.board{grid-template-columns:1fr;padding:12px}.topbar,.filters{padding:10px 12px}}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="logo"><div class="logo-dot"></div> Snapdrum Triage <span class="save-hint" id="save-hint"></span></div>
+  <div class="stats-row">
+    <div class="stat"><div class="stat-val" id="s-todo">0</div><div class="stat-lbl">To do</div></div>
+    <div class="stat"><div class="stat-val" id="s-inprogress">0</div><div class="stat-lbl">In prog</div></div>
+    <div class="stat"><div class="stat-val" id="s-blocked">0</div><div class="stat-lbl">Blocked</div></div>
+    <div class="stat"><div class="stat-val" id="s-done">0</div><div class="stat-lbl">Done</div></div>
+    <div class="ring-wrap">
+      <svg width="44" height="44" viewBox="0 0 44 44">
+        <circle cx="22" cy="22" r="18" fill="none" stroke="#2e2e38" stroke-width="3"/>
+        <circle id="ring" cx="22" cy="22" r="18" fill="none" stroke="#7c6cfc" stroke-width="3" stroke-linecap="round" stroke-dasharray="113.1" stroke-dashoffset="113.1" style="transition:stroke-dashoffset .4s"/>
+      </svg>
+      <div class="ring-val" id="ring-pct">0%</div>
+    </div>
+  </div>
+</div>
+
+<div class="filters">
+  <button class="chip active" onclick="setFilter('all',this)">All</button>
+  <button class="chip" onclick="setFilter('Projects',this)">Projects</button>
+  <button class="chip" onclick="setFilter('Courses',this)">Courses</button>
+  <button class="chip" onclick="setFilter('Socials',this)">Socials</button>
+  <button class="chip" onclick="setFilter('Special',this)">Special</button>
+  <button class="add-btn" onclick="openAdd()">+ Add card</button>
+</div>
+
+<div class="board">
+  <div>
+    <div class="col-head"><span class="col-label">To do</span><span class="col-count" id="cnt-todo">0</span></div>
+    <div class="col-body" id="col-todo" data-col="todo"></div>
+  </div>
+  <div>
+    <div class="col-head"><span class="col-label">In Progress</span><span class="col-count" id="cnt-inprogress">0</span></div>
+    <div class="col-body" id="col-inprogress" data-col="inprogress"></div>
+  </div>
+  <div>
+    <div class="col-head"><span class="col-label">Blocked</span><span class="col-count" id="cnt-blocked">0</span></div>
+    <div class="col-body" id="col-blocked" data-col="blocked"></div>
+  </div>
+  <div>
+    <div class="col-head"><span class="col-label">Done</span><span class="col-count" id="cnt-done">0</span></div>
+    <div class="col-body" id="col-done" data-col="done"></div>
+  </div>
+</div>
+
+<div class="overlay" id="overlay" onclick="if(event.target===this)closeModal()">
+  <div class="modal">
+    <div class="modal-title" id="modal-title">Add card</div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Title</label><input class="form-input" id="f-title" placeholder="Card title"/></div>
+      <div class="form-group"><label class="form-label">Section</label>
+        <select class="form-input" id="f-section">
+          <option>Projects</option><option>Courses</option><option>Socials</option><option>Special</option><option>Emails</option><option>Parking Lot</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Priority</label>
+        <select class="form-input" id="f-priority">
+          <option value="urgent">Urgent</option><option value="thisweek">This week</option><option value="planning">Planning</option>
+        </select>
+      </div>
+      <div class="form-group"><label class="form-label">Status</label>
+        <select class="form-input" id="f-status">
+          <option value="todo">To do</option><option value="inprogress">In progress</option><option value="blocked">Blocked</option><option value="done">Done</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Deadline</label><input class="form-input" id="f-deadline" placeholder="e.g. 25 Mar"/></div>
+      <div class="form-group"><label class="form-label">Owner</label><input class="form-input" id="f-owner" placeholder="e.g. Mario S."/></div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Tasks</label>
+      <div id="tasks-editor"></div>
+      <button class="add-task-field-btn" onclick="addTaskField()">+ Add task</button>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-delete" id="btn-delete" onclick="deleteCard()" style="display:none">Delete</button>
+      <button class="btn-cancel" onclick="closeModal()">Cancel</button>
+      <button class="btn-save" onclick="saveCard()">Save</button>
+    </div>
+  </div>
+</div>
+
+<script>
+var STORAGE_KEY='snapdrum-v4';
+var activeFilter='all';
+var editingId=null;
+var dragId=null;
+var COLS=['todo','inprogress','blocked','done'];
+var COL_LABELS={todo:'To do',inprogress:'In progress',blocked:'Blocked',done:'Done'};
+
+var DEFAULT=[
+  {id:1,title:'UN Project',section:'Projects',status:'todo',priority:'urgent',deadline:'25 Mar',owner:'',tasks:[{t:'Review & verify PATH User Guide v2',done:false},{t:'Final checklist w/ Mario S.',done:false},{t:'Request info/permissions from client',done:false}]},
+  {id:2,title:'Moorgate Voice Agent',section:'Projects',status:'todo',priority:'urgent',deadline:'~27 Mar',owner:'',tasks:[{t:'Fine-tune the VA',done:false},{t:'Run EVALS (client requested)',done:false},{t:'Confirm meeting date with client',done:false}]},
+  {id:3,title:'Moorgate Email Automation',section:'Projects',status:'todo',priority:'thisweek',deadline:'',owner:'',tasks:[{t:'Chase client for full project scope',done:false}]},
+  {id:4,title:'Marcus Lincoln',section:'Projects',status:'todo',priority:'thisweek',deadline:'This week',owner:'',tasks:[{t:'Schedule follow-up meeting',done:false}]},
+  {id:5,title:'Law Firm Client',section:'Projects',status:'todo',priority:'thisweek',deadline:'',owner:'',tasks:[{t:'Follow up with client',done:false}]},
+  {id:6,title:'PM Publishing',section:'Projects',status:'inprogress',priority:'planning',deadline:'',owner:'',tasks:[{t:'Get status update from team',done:false}]},
+  {id:7,title:'Enterprise Analytics',section:'Projects',status:'inprogress',priority:'planning',deadline:'',owner:'',tasks:[{t:'Get scope reviewed by Aki',done:false}]},
+  {id:8,title:'AI PM Bootcamp & Certificate',section:'Courses',status:'todo',priority:'urgent',deadline:'Today',owner:'',tasks:[{t:'Create & add free resources into course',done:false}]},
+  {id:9,title:'Mini Certifications',section:'Courses',status:'todo',priority:'urgent',deadline:'EOD',owner:'',tasks:[{t:'Document 5 mini cert concepts',done:false}]},
+  {id:10,title:'MPB - Evals Session',section:'Courses',status:'todo',priority:'urgent',deadline:'EOD',owner:'',tasks:[{t:'Complete Session 1 draft + glossary',done:false},{t:'Draft 1-page 3-session pathway outline',done:false}]},
+  {id:11,title:'Maven - Drip Emails',section:'Courses',status:'todo',priority:'thisweek',deadline:'',owner:'Mario S.',tasks:[{t:'Improve drip/follow-up emails on Maven',done:false},{t:'Review what Hamel sent',done:false},{t:'Sign up to top 20 courses & track emails',done:false}]},
+  {id:12,title:'AI for Lay People',section:'Courses',status:'inprogress',priority:'planning',deadline:'',owner:'',tasks:[{t:'Finalise name/branding',done:false},{t:'Find someone to deliver Python basics module',done:false}]},
+  {id:13,title:'Substack - Posts',section:'Socials',status:'todo',priority:'urgent',deadline:'Thursday',owner:'',tasks:[{t:'Publish 25 posts today',done:false},{t:'Publish 20 posts tomorrow',done:false}]},
+  {id:14,title:'Substack - Image Creation',section:'Socials',status:'blocked',priority:'urgent',deadline:'Thursday',owner:'',tasks:[{t:'Fix clean image creation via Nano Banana',done:false}]},
+  {id:15,title:'Dean - Testimonial Call',section:'Socials',status:'todo',priority:'urgent',deadline:'Today 6PM',owner:'',tasks:[{t:'Join call with Dean to collect testimonial',done:false}]},
+  {id:16,title:'Anthropic Event',section:'Socials',status:'todo',priority:'urgent',deadline:'Urgent',owner:'Mario for Aki',tasks:[{t:'Register for Anthropic SF event',done:false}]},
+  {id:17,title:'LinkedIn - Jobs Post',section:'Socials',status:'todo',priority:'thisweek',deadline:'Friday',owner:'',tasks:[{t:'Curate 50 AI & ML job openings',done:false},{t:'Post on LinkedIn + Substack',done:false},{t:'Funnel readers to email list',done:false}]},
+  {id:18,title:'LinkedIn - Account Strategy',section:'Socials',status:'todo',priority:'thisweek',deadline:'',owner:'',tasks:[{t:'Develop better warming strategy',done:false},{t:'Add AI Engineer event to content list',done:false}]},
+  {id:19,title:'Email Signatures',section:'Socials',status:'todo',priority:'thisweek',deadline:'',owner:'Mario',tasks:[{t:'Create email signature for Aki',done:false}]},
+  {id:20,title:'Mobile Editing Club - Workflows',section:'Special',status:'todo',priority:'planning',deadline:'',owner:'',tasks:[{t:'Find way to access their workflows',done:false}]},
+  {id:21,title:'Mini Courses / TAI Webpage',section:'Special',status:'inprogress',priority:'thisweek',deadline:'',owner:'Aki',tasks:[{t:'Complete first draft',done:false}]},
+  {id:22,title:'Project Delivery Process',section:'Special',status:'todo',priority:'thisweek',deadline:'',owner:'',tasks:[{t:'Develop robust delivery process',done:false},{t:'Goal: onboard more clients & projects',done:false}]},
+  {id:23,title:'Website - Dynamic & Content',section:'Special',status:'inprogress',priority:'thisweek',deadline:'',owner:'',tasks:[{t:'Website dynamics section',done:true},{t:'Evals - pending',done:false},{t:'Speak to Ateeb re: content creation',done:false}]},
+  {id:24,title:'Clay - Corporate Outreach',section:'Special',status:'todo',priority:'thisweek',deadline:'',owner:'Mario',tasks:[{t:'Finish learning Clay',done:false},{t:'Work on corporate client outreach',done:false}]},
+  {id:25,title:'SL & South Asia Lead Gen',section:'Special',status:'todo',priority:'thisweek',deadline:'',owner:'',tasks:[{t:'Plan session targeting SL & South Asia',done:false},{t:'Tap into AIESEC, GDG, Rotaract',done:false},{t:'Strategy to patch Maven revenue loss',done:false}]}
+];
+
+function loadCards(){
+  try{var d=localStorage.getItem(STORAGE_KEY);return d?JSON.parse(d):JSON.parse(JSON.stringify(DEFAULT));}
+  catch(e){return JSON.parse(JSON.stringify(DEFAULT));}
+}
+function persist(){
+  try{
+    localStorage.setItem(STORAGE_KEY,JSON.stringify(CARDS));
+    var h=document.getElementById('save-hint');
+    h.textContent='Saved';
+    setTimeout(function(){h.textContent='';},1500);
+  }catch(e){}
+}
+
+var CARDS=loadCards();
+
+function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function badgeClass(p){return p==='urgent'?'b-urgent':p==='thisweek'?'b-thisweek':'b-planning';}
+function badgeLabel(p){return p==='urgent'?'Urgent':p==='thisweek'?'This week':'Planning';}
+
+function buildCard(card){
+  var el=document.createElement('div');
+  el.className='card';
+  el.id='card-'+card.id;
+  el.draggable=true;
+  el.dataset.id=card.id;
+
+  var allT=card.tasks.length;
+  var doneT=card.tasks.filter(function(t){return t.done;}).length;
+  var pct=allT?Math.round(doneT/allT*100):0;
+
+  var tasksHtml='';
+  for(var i=0;i<card.tasks.length;i++){
+    var tk=card.tasks[i];
+    tasksHtml+='<div class="task-row">'
+      +'<div class="cb'+(tk.done?' checked':'')+'" data-cid="'+card.id+'" data-ti="'+i+'"></div>'
+      +'<span class="task-txt'+(tk.done?' done':'')+'">'+esc(tk.t)+'</span>'
+      +'</div>';
+  }
+
+  el.innerHTML=
+    '<div class="card-sec">'+esc(card.section)+'</div>'
+    +'<div class="card-top"><span class="card-title">'+esc(card.title)+'</span>'
+    +'<span class="badge '+badgeClass(card.priority)+'">'+badgeLabel(card.priority)+'</span></div>'
+    +(card.deadline?'<div class="deadline"><span class="deadline-dot"></span>'+esc(card.deadline)+'</div>':'')
+    +(card.tasks.length?'<div class="tasks">'+tasksHtml+'</div>':'')
+    +(allT?'<div class="prog-wrap"><div class="prog-bar"><div class="prog-fill" style="width:'+pct+'%"></div></div><div class="prog-txt">'+doneT+'/'+allT+' tasks</div></div>':'')
+    +'<div class="card-meta">'
+    +'<span class="drag-hint">&#8661; drag to move</span>'
+    +'<button class="edit-btn" data-edit="'+card.id+'">Edit</button>'
+    +'</div>'
+    +(card.owner?'<div class="owner-tag">&#128100; '+esc(card.owner)+'</div>':'');
+
+  el.addEventListener('dragstart',function(e){
+    dragId=card.id;
+    setTimeout(function(){el.classList.add('dragging');},0);
+    e.dataTransfer.effectAllowed='move';
+    e.dataTransfer.setData('text/plain',String(card.id));
+  });
+  el.addEventListener('dragend',function(){
+    el.classList.remove('dragging');
+    dragId=null;
+    document.querySelectorAll('.col-body').forEach(function(c){c.classList.remove('drag-over');});
+  });
+  el.querySelectorAll('.cb').forEach(function(cb){
+    cb.addEventListener('click',function(e){
+      e.stopPropagation();
+      toggleTask(parseInt(cb.dataset.cid),parseInt(cb.dataset.ti));
+    });
+  });
+  el.querySelector('[data-edit]').addEventListener('click',function(e){
+    e.stopPropagation();
+    openEdit(card.id);
+  });
+  return el;
+}
+
+function render(){
+  var allT=0,doneT=0;
+  COLS.forEach(function(col){
+    var cards=CARDS.filter(function(c){return c.status===col&&(activeFilter==='all'||c.section===activeFilter);});
+    var body=document.getElementById('col-'+col);
+    body.innerHTML='';
+    if(!cards.length){
+      var emp=document.createElement('div');
+      emp.className='col-empty';emp.textContent='Drop cards here';
+      body.appendChild(emp);
+    } else {
+      cards.forEach(function(card){body.appendChild(buildCard(card));});
+    }
+    document.getElementById('cnt-'+col).textContent=cards.length;
+    document.getElementById('s-'+col).textContent=cards.length;
+    cards.forEach(function(c){allT+=c.tasks.length;doneT+=c.tasks.filter(function(t){return t.done;}).length;});
+  });
+  var pct=allT?Math.round(doneT/allT*100):0;
+  document.getElementById('ring-pct').textContent=pct+'%';
+  document.getElementById('ring').setAttribute('stroke-dashoffset',113.1-(pct/100)*113.1);
+}
+
+/* DRAG AND DROP */
+document.querySelectorAll('.col-body').forEach(function(col){
+  col.addEventListener('dragover',function(e){
+    e.preventDefault();
+    e.dataTransfer.dropEffect='move';
+    col.classList.add('drag-over');
+  });
+  col.addEventListener('dragleave',function(e){
+    if(!col.contains(e.relatedTarget)) col.classList.remove('drag-over');
+  });
+  col.addEventListener('drop',function(e){
+    e.preventDefault();
+    col.classList.remove('drag-over');
+    var id=parseInt(e.dataTransfer.getData('text/plain'));
+    var newCol=col.dataset.col;
+    var card=CARDS.find(function(c){return c.id===id;});
+    if(card&&newCol&&card.status!==newCol){
+      card.status=newCol;
+      persist();
+      render();
+    }
+  });
+});
+
+function toggleTask(cid,ti){
+  var card=CARDS.find(function(c){return c.id===cid;});
+  if(card){card.tasks[ti].done=!card.tasks[ti].done;persist();render();}
+}
+function setFilter(f,btn){
+  activeFilter=f;
+  document.querySelectorAll('.chip').forEach(function(b){b.classList.remove('active');});
+  btn.classList.add('active');render();
+}
+function openAdd(){
+  editingId=null;
+  document.getElementById('modal-title').textContent='Add card';
+  document.getElementById('f-title').value='';
+  document.getElementById('f-section').value='Projects';
+  document.getElementById('f-priority').value='thisweek';
+  document.getElementById('f-status').value='todo';
+  document.getElementById('f-deadline').value='';
+  document.getElementById('f-owner').value='';
+  document.getElementById('btn-delete').style.display='none';
+  renderTaskFields([]);
+  document.getElementById('overlay').classList.add('open');
+}
+function openEdit(cid){
+  var card=CARDS.find(function(c){return c.id===cid;});
+  if(!card)return;
+  editingId=cid;
+  document.getElementById('modal-title').textContent='Edit card';
+  document.getElementById('f-title').value=card.title;
+  document.getElementById('f-section').value=card.section;
+  document.getElementById('f-priority').value=card.priority;
+  document.getElementById('f-status').value=card.status;
+  document.getElementById('f-deadline').value=card.deadline||'';
+  document.getElementById('f-owner').value=card.owner||'';
+  document.getElementById('btn-delete').style.display='block';
+  renderTaskFields(card.tasks);
+  document.getElementById('overlay').classList.add('open');
+}
+function renderTaskFields(tasks){
+  var ed=document.getElementById('tasks-editor');ed.innerHTML='';
+  tasks.forEach(function(tk){
+    var row=document.createElement('div');row.className='task-edit-row';
+    var inp=document.createElement('input');inp.className='form-input';inp.value=tk.t;inp.placeholder='Task description';
+    var rm=document.createElement('button');rm.className='remove-task-btn';rm.textContent='\xD7';rm.onclick=function(){row.remove();};
+    row.appendChild(inp);row.appendChild(rm);ed.appendChild(row);
+  });
+}
+function addTaskField(){
+  var ed=document.getElementById('tasks-editor');
+  var row=document.createElement('div');row.className='task-edit-row';
+  var inp=document.createElement('input');inp.className='form-input';inp.placeholder='Task description';
+  var rm=document.createElement('button');rm.className='remove-task-btn';rm.textContent='\xD7';rm.onclick=function(){row.remove();};
+  row.appendChild(inp);row.appendChild(rm);ed.appendChild(row);inp.focus();
+}
+function saveCard(){
+  var title=document.getElementById('f-title').value.trim();
+  if(!title)return;
+  var inputs=document.getElementById('tasks-editor').querySelectorAll('input');
+  var tasks=[];
+  inputs.forEach(function(inp){var v=inp.value.trim();if(v)tasks.push({t:v,done:false});});
+  if(editingId){
+    var card=CARDS.find(function(c){return c.id===editingId;});
+    if(card){
+      var old=card.tasks;
+      card.title=title;card.section=document.getElementById('f-section').value;
+      card.priority=document.getElementById('f-priority').value;card.status=document.getElementById('f-status').value;
+      card.deadline=document.getElementById('f-deadline').value;card.owner=document.getElementById('f-owner').value;
+      card.tasks=tasks.map(function(tk,i){return{t:tk.t,done:old[i]?old[i].done:false};});
+    }
+  } else {
+    var newId=CARDS.length?Math.max.apply(null,CARDS.map(function(c){return c.id;}))+1:1;
+    CARDS.push({id:newId,title:title,section:document.getElementById('f-section').value,priority:document.getElementById('f-priority').value,status:document.getElementById('f-status').value,deadline:document.getElementById('f-deadline').value,owner:document.getElementById('f-owner').value,tasks:tasks});
+  }
+  closeModal();persist();render();
+}
+function deleteCard(){
+  if(!editingId)return;
+  CARDS=CARDS.filter(function(c){return c.id!==editingId;});
+  closeModal();persist();render();
+}
+function closeModal(){document.getElementById('overlay').classList.remove('open');editingId=null;}
+
+render();
+</script>
+</body>
+</html>
